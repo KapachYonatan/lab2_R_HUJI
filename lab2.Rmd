@@ -1,0 +1,503 @@
+---
+title: "52414: Lab 2 Solutions"
+author: "Yoseph Joffe, Yonatan Kapach"
+date: "June 14, 2023"
+output:
+  html_document:
+    code_folding: hide
+---
+
+## *Lab 2: Sampling, Data Wrangling and Visualization*  
+<br/><br/>  
+  
+
+###  Instructions  
+  
+This lab will be submitted in pairs. (if you don't have a pair, please contact us).  
+
+**Grading:** There are overall $13$ sub-questions in two questions, plus a *bonus* sub-question. Each sub-question is worth $10$ points for the lab's grade.
+Select $10$ sub-questions and indicate which ones did you answer (with a possible addition of the *bonus* sub-question). If your solution contains more than $10$ sub-questions, we will check and grade only the first $10$.  
+
+Some questions may require data wrangling and manipulation which you need to decide on. <br>
+In some graphs you may need to change the graph limits. If you do so, please include the outlier 
+points you have removed in a separate table.
+
+Show numbers in plots/tables using standard digits and not scientific display. That is: 90000000 and not 9e+06. <br>
+Round numbers to at most 3 digits after the dot - that is, 9.456 and not 9.45581451044
+
+The required libraries are listed below the instructions. You are allowed to add additional libraries if you want. 
+If you do so, *please explain what libraries you've added, and what is each new library used for*. 
+
+
+
+Required Libraries:
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+library(ggplot2)
+library(dplyr)
+library(scales)   # needed for formatting y-axis labels to non-scientific type
+library(tidyr)
+library(tidyverse)
+library(reshape2) # melt
+library(ggthemes)
+library(modelr)
+############################################
+library(grid) # geom_segment
+library(ggrepel)# Use ggrepel::geom_label_repel
+library(rvest)
+
+options("scipen"=100, "digits"=4)  # avoid scientific display of digits. Take 4 digits. 
+```
+
+<br/><br/>
+
+## Q1. Rollups        
+![Rollups](https://ashdodonline.co.il/wp-content/uploads/2023/05/2.jpg)
+
+You are a `rollups` manufacturer and seller.  You start with one `rollup` machine and zero shekels. <br>
+You have one month, i.e. $30$ days to sell and your goal is to maximize your profit. <br>
+For each `rollup` that you sell, you earn one shekel. <br>
+Your machines are probabilistic and each machine generates a `Poisson(1)` number of rollups each day.
+
+Formally, at the end of day $i$, you have $m_i$ `rollups` machines, and $s_i$ shekels, where you start with $r_0=1$ and $s_0=0$. <br>
+In the evening you manufacture $r_i \sim Poiss(m_i)$ `rollups` and sell them in the next day. 
+Suppose that you can sell *all* `rollups` you have during each day. <br>
+At the evening of the day, you can decide if you want to buy
+more `rollups` machines in order to increase the number of `rollups` you can make and sell tomorrow and in the next days. <br>
+Each `rollup` machine costs one shekel, and you cannot be in dept to your dealer. 
+That is, you can decide to payat each day any integer amount $a$ of machines not exceeding your current profit, i.e. any $a=0,1,2,..,s_i$. <br>
+A the end of day $30$, all the kids in teh neighborhood the `pistachio crunch ice cream` trend starts and the market for `rollups` collapses, hence all your `rollups` becomes worthless.  
+Your final profit is $s_{30}$ , the random variable describing the number of shekels you are left with after $30$ days.
+
+1. Suppose that you invest all your money in buying `rollups` machines in days $1-29$, and only keep a profit at the end of day $30$. 
+Write a simulation program to give the distribution of $s_{30}$ for this strategy. <br>
+Simulate at least `10,000` monhts of `rollups` sales (i.e. at least `10,000` random values of $s_{30}$). 
+Plot the resulting empirical distribution and report the `mean`, `median` and $25$ and $75$ percentiles. Choose a plot that you consider best suitable fordisplaying the distribution. <br>
+Does the resulting distribution resemble the Normal distribution? if not, choose a transformation that will make it look more similar to the Normal distribution and show the transformed distirbution, together with a machine Normal distribution with the same `mean` and `variance`.   
+
+2. Suppose that you never invest any money in buying new machines, but just collect the profits from the one machine that you start with. Repeat 1. for this strategy. 
+
+3. Suppose that at the end of day $i$, you decide to buy a random number of machines, with the uniform distribution $U[0, s_i]$. 
+Repeat 1. for this strategy. 
+
+4. Suppose that you invest all your money up to day $i$, and then stop investing at all. Repeat the above for $i=1,..,29$ and plot
+the `expected` profit as a function of $i$. What $i$ is best for this strategy in terms of the expected profit? 
+
+5. (Bonus *) What is the optimal strategy? that the strategy that will maximize the expected profit $E[s_{30}]$? <br>
+Describe the strategy, prove that it is optimal, and compute the expected profit under this optimal strategy. 
+
+
+
+
+
+**Solutions here: Erase some to keep only $10$ sub-questions overall! ** <br>
+Q1.1. First, we'll create a function to simulate one iteration of this strategy (30 days):
+
+```{r, cache=TRUE} 
+strat1_simulate <- function(i, m){
+  if(i == 30) # reached day 30 
+    return(rpois(1, m))
+  s <- rpois(1, m) # profit for day i
+  
+  #print(paste("Num of machines in day:", i, ":", m))
+  #print(paste("Profit of day", i, ":", s))
+  
+  strat1_simulate(i+1, m + s) # manufacture additional s machines
+}
+```
+
+Now let's analyse the distribution of the profit:
+
+```{r}
+set.seed(137491)
+strat1 <- sapply(rep(1,10000), strat1_simulate, 1) # sampling 10000 times
+hist(strat1, main = "Profit distribution (strategy 1)")
+summary(strat1)
+```
+
+1st and 3rd quantiles are 25% and 75% quantiles correspondingly. <br>
+The distribution resembles Chi-squared distribution. If we want to make it look more like Normal distribution, square-root transformation may help. Let's try it and plot against Normal distribution with the same mean and variance:
+
+```{r}
+t_strat1 <- sqrt(strat1) # transformed
+machine <- rnorm(10000, mean(t_strat1), sd(t_strat1))
+
+hist(t_strat1)
+hist(machine)
+```
+
+We can smooth the graphs and plot them together to see differences:
+
+```{r}
+# Build dataset with different distributions (melted)
+data <- data.frame(
+  type = factor(rep(c("Sqrt_strat1","Machine"),each=10000)),
+  value = c( t_strat1, machine ))
+
+# Represent it
+data %>%
+  ggplot( aes(x=value, color=type)) +
+    geom_density()
+```
+<br> Overall, the transformed data looks similar to Normal distribution.
+
+
+Q1.2. Strat2 is having one machine and take the profit each day. Our profit in the end of the ith day will distribute $s_{i}\sim Poiss\left(1\right)$. <br>
+Every days profit is independent of the other, so our total profit distributes $\sum_{i=1}^{30}s_{i}\sim Poiss\left(30\right)$. <br>
+We'll create a simulation:
+
+```{r, cache=TRUE} 
+strat2_simulate <- function(){
+  return(rpois(1, 30))
+}
+```
+
+Now let's analyse strat2:
+
+```{r}
+set.seed(137492)
+strat2 <- replicate(10000, strat2_simulate()) # sampling 10000 times
+hist(strat2, main = "Profit distribution (strategy 2)")
+summary(strat2)
+```
+
+The distribution looks close to Normal. We can explain it due to the fact we sampled a large number of i.i.d poisson random variables with $\lambda=30$ which is a high enough mean to make the distribution symmetric around it and resemble normal distribution. We expect higher values than 30 to be sampled as likely as lower values, in a symmetric way. If for example we sampled with $\lambda=1$, the distribution was skewed with a right tail.  <br>
+Let's plot the smoothed relevant Normal distribution against our data:
+
+```{r}
+machine <- rnorm(10000, mean(strat2), sd(strat2))
+
+# Build dataset with different distributions (melted)
+data <- data.frame(
+  type = factor(rep(c("strat2","Machine"),each=10000)),
+  value = c( strat2, machine ))
+
+# Represent it
+data %>%
+  ggplot( aes(x=value, color=type)) +
+    geom_density()
+```
+
+As we expected, both distributions are very similar.
+
+Q1.3. Creating a function to simulate 30 days of strategy 3:
+
+```{r, cache=TRUE} 
+strat3_simulate <- function(i, m, total){
+  s <- rpois(1, m) # profit for day i
+  if(i == 30) # reached day 30 
+    return(total + s)
+  
+  new_m <- sample(1:s, 1) # manufacture additional machines
+  total <- total + s - new_m # sum the remaining profit
+  
+  strat3_simulate(i+1, m + new_m, total) 
+}
+```
+
+Let's analyse 10000 samples:
+
+```{r}
+set.seed(36146)
+strat3 <- sapply(rep(1,10000), strat3_simulate, 1, 0) # sampling 10000 times
+hist(strat3, main = "Profit distribution (strategy 3)", breaks = "Scott")
+summary(strat3)
+```
+
+We see a long right tail which indicates a positive skew. We note that the skew here is much more severe than in strategy 1, so we will want to apply a more harsh transformation in terms of order of magnitude. Let's try a $log$ transformation:
+
+```{r}
+set.seed(6597165)
+t_strat3 <- log(strat3)
+hist(t_strat3)
+
+machine <- rnorm(10000, mean(t_strat3), sd(t_strat3)) 
+```
+
+We can see it resembles normal distribution now. Let's plot smoothed density:
+
+```{r}
+# Build dataset with different distributions (melted)
+data <- data.frame(
+  type = factor(rep(c("log_strat3","Machine"),each=10000)),
+  value = c( t_strat3, machine ))
+
+# Represent it
+data %>%
+  ggplot( aes(x=value, color=type)) +
+    geom_density()
+```
+
+Q1.4. 
+```{r, cache=TRUE} 
+strat4_simulate <- function(i, m, end_i){
+  if(i == end_i + 1) # reached the day after end day of manufacturing
+    return(rpois(1, (30 - end_i) * m)) # sample poiss(m) * (30 - end_i) remaining days
+  
+  s <- rpois(1, m) # profit for day i
+  
+  strat4_simulate(i+1, m + s, end_i) # manufacture additional s machines
+}
+```
+
+Our function applies strategy 1 until day $i$ and then from day $i+1$ applies strategy 2 over the remaining days of the month. Now let's simulate this strategy for every $i=1,2,\ldots,29$:
+
+```{r}
+strat4_mean <- vector(length = 29)
+for (i in 1:29) {
+  strat4_mean[i] <- mean(replicate(10000, strat4_simulate(1,1,i)))
+}
+```
+
+We created a vector whose $i$ entry is the empirical expected profit of the corresponding strategy, which equals the mean of the $10,000$ samples. Now we can visualize it:
+
+```{r}
+# Build dataset with different distributions (melted)
+data <- as.data.frame(cbind(End_day=1:29, Expected_profit=strat4_mean))
+
+data %>%
+  ggplot(aes(x=End_day, y=Expected_profit)) +
+  geom_point()
+```
+
+We can see what looks like exponential growth of our function. We note that because of the scale, we cannot see the growth rate during the first 20 days very clearly. Let's zoom in to the first 20 days:
+
+```{r}
+data_20 <- data[1:20, ]
+
+data_20 %>%
+  ggplot(aes(x=End_day, y=Expected_profit)) +
+  geom_point()
+```
+
+Here as well we see exponential growth. We can conclude that the growth rate of the expected profit is exponential with $i$ with a slight drop on the $29th$ day, and therefore the best $i$ for this strategy is $28$.
+
+Q1.5 (Bonus). 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+
+
+
+## Q2. Scientists
+![Scientists](https://s3.amazonaws.com/images.powershow.com/P1254325962eFyXl.pr.jpg)
+
+In this question we extract and analyze text from Wikipedia describing notable female scientists from the 20th century. 
+
+1. Use the  `rvest` library to scrape all the **names** of notable female scientists of the 20th century from 
+[here](https://en.wikipedia.org/wiki/List_of_female_scientists_in_the_20th_century). For ease of extraction, you can extract only scientists with known birth and/or death year. 
+You should end up with a `names` vector of at least `500` elements, where each element is a name of a different female scientist. Print the first and last $5$ names. 
+
+
+2. Create a data-frame with one row per scientist, with separate columns indicating the name, 
+the `birth` year, the `death` year (leave as `NA` when one or both of them are not available), 
+the nationality, and the occupation (the last two usually indicated right after the year for most scientists). 
+For example, for the first scientist `Heloísa Alberto Torres` the birth year is `1895`, the death year is `1977`, 
+the nationality is `Brazilian` and the occupation is `anthropologist`. 
+Display the top-5 and bottom-5 of the resulting data-frame. <br>
+**Notes:** a. A few scientists appear more than once, in different fields. In these cases keep the scientists as separate cases. <br>
+b. The text describing some scientists may be missing and/or no in the common format shared by most scientist. 
+It is ok if your code misses/gives wrong answers to some of them and you don't need to handle every special case. 
+Make sure that your code gives the correct information for at least `400` of the scientists for each column. 
+
+
+
+3. When you click on each scientist name, you are transferred into a different url containing text about this scientist. 
+For example, clicking on the first name `Heloísa Alberto Torres`, brings you [here](https://en.wikipedia.org/wiki/Helo%C3%ADsa_Alberto_Torres).
+Parse the data and create a new column called `urls` containing the url for each scientist. 
+You may need to modify the names to get the exact urls. 
+You don't have to be perfect here, and it is enough to get the correct urls for at least $400$ out of the $>500$ scientists.   <br>
+In addition, the scientists are divided into fourteen fields the field of study (e.g. `Anthropology`, `Archaeology`, ...). 
+Add a column indicating the field of study for each scientists. 
+Extract and show the sub-table with the first scientists in each field (showing all columns for these scientistis)
+
+
+
+
+4. Next we would like to retrieve the actual texts about each scientist. 
+Write a function called `wiki_text_parser` that given a specific scientist's unparsed html page text as input, 
+outputs the parsed biographical text as a string. <br>
+The text should start at the line below the line `From Wikipedia, the free encyclopedia` in the Wikipedia page. <br>
+The text should end right before the `References` of the Wikipedia page. See for example the highlighted text below. <br>
+Run the function on the first name `Heloísa Alberto Torres` and verify that the biographical text is extracted correctly. 
+Print the resulting text and its length in characters. <br>
+**Hint:** You can look at occurrences of the scientist name
+
+
+
+
+5. Retrieve `all` the parsed scientists biographies into a vector of strings called `bios`. You can use your function from the previous questions  <br>
+Add the biography length in characters as a new column to the scientists data-frame. 
+Find the scientist with the **shortest** and with the **longest** biography for **each** of the fourteen research fields (in terms of total number of English characters), and show them in two separate tables/dataframes. <br>
+**Note:** reading all biographies may take a few minutes. <br>
+Some errors may occur, but make sure that your pages urls (part b.) match and retrieve 
+successfully at least $400$ out of the $>500$ biographies. <br>
+**Hint:** You can use the `try` command to run another command such that if the command fail the program continues and is not stopped. 
+
+
+
+6. Retrieve all words appearing in any of the biographies and compute their frequencies (treat all the texts of the biographies of the scientists as one large document and compute the frequencies in this document). <br>
+Remove all common stop words (use the command `stop_words` from the *tidytext* package). <br>
+Remove also `words` containing special characters like commas, `&`, tags (`#`) `/`, `\` etc. 
+Use the `wordcloud2` library to display in a `word-cloud` the top-100 (most-common) remaining words using the computed frequencies. 
+
+
+7. Display in a figure with fourteen separate bar-plots the distribution of biography length for each of the fourteen fields. 
+Describe the major differences between the fields. <br>
+Next, Compute for each of the fourteen fields groups the words lengths distribution. Show the distributions in a figure with fourteen separate bar-plots. Describe the major differences between the fields. 
+
+
+8. Concatenate all biographies and compute the frequency $n_i$ of each of the $26$ letters in the English alphabet in the combined text. <br>
+Consider uppercase and lowercase as the same letter. <br> 
+Plot the sorted frequencies after normalization $p_i = n_i / n$ where $n$ it the total number of letters, in a bar-plot 
+
+
+9. Compute the frequencies of consecutive **pairs** of letters for all $26^2$ ordered pairs of English letters in the same text. <br>
+That is, create a $26 \times 26$ table where for each two letters $i$ and $j$ the entry $(i,j)$ contains $n_{ij}$, the number of occurrences of the
+two letters appearing consecutively. Count only pairs of letters appearing in the same word. <br>
+For example, if the biographies text was: `Angela Merkel` then the count for `el` in your table should be 2, the count for `ng` should be 1, 
+and the count for `am` should be 0. <br>
+What is the most *common* pair of letters? what is the *least common* pair?  
+
+
+**Solutions here:** <br>
+Q2.1. 
+```{r, cache=TRUE} 
+webpage <- read_html("https://en.wikipedia.org/wiki/List_of_female_scientists_in_the_20th_century")
+list_elements <- webpage %>% html_nodes("div.mw-parser-output > ul > li")
+scraped_lists <- html_text(list_elements)[-576] # list of strings containing women names, minus the last cell which is not a name
+```
+
+We note that the last element was not a name, and therefore we removed it.
+
+```{r}
+scientists <- str_replace(scraped_lists, "(\\ \\(|,).*", "") # Regex to remove the string that follows each woman name
+
+head(scientists, 5)
+tail(scientists, 5)
+```
+
+We used a regular expression to remove all text appearing after $,$ or $($.
+
+Q2.2. We'll extract the relevant data using Regex:
+
+```{r, cache=TRUE} 
+birth <- str_extract(scraped_lists, "[0-9]{4}")
+death <- scraped_lists %>% str_extract("[-|–][0-9]{4}") %>% str_replace("-", "") %>% str_replace("–", "") %>% replace_na("Alive")
+nation <- scraped_lists %>% str_extract("(\\]|,)\\ [A-Z][a-z]*") %>% str_replace(", ", "") %>% str_replace("] ", "")
+occupation <- scraped_lists %>% str_extract(" ([a-z]*ist)") %>% str_replace(" ", "")
+```
+
+We'll note that in the case of "Death year" we replaced NAs with "Alive". <br>
+Now let's combine all the vectors to a data frame:
+
+```{r}
+sci_df <- as.data.frame(cbind(Name=scientists, Birth_year=birth, Death_year=death, Nationality=nation, Occupation=occupation))
+
+head(sci_df)
+```
+
+If we remove all NAs, we still remain with more than 400 rows as needed:
+
+```{r}
+dim(sci_df %>% na.omit())[1] # Number of rows
+```
+
+Q2.3. We'll scrape the url using rvest and bind it to our dataframe:
+
+```{r, cache=TRUE} 
+href <- webpage %>% html_nodes("div.mw-parser-output > ul > li > a:first-child")
+urls <- href[-576] %>% html_attr("href")
+
+url_sci_df <- cbind(sci_df, urls=urls) # Combined data frame with URL column
+head(url_sci_df)
+```
+
+Now we want to add "fields". We'll scrape it:
+
+```{r}
+h2 <- webpage %>% html_nodes("div.mw-parser-output > h2")
+fields <- h2[-15:-18] %>% html_node("span") %>% html_attr("id")
+```
+
+Now we need to know how to fit the right field to each scientist. We can take the "edge names". For each chunk in the Wikipedia webpage correspond to a field, we'll take the first scientist name:
+
+```{r}
+ul <- webpage %>% html_nodes("div.mw-parser-output > ul")
+
+# filter the start name at each field
+edge_names <- ul[-c(14:27,29)] %>% html_node("li > a") %>% html_attr("title")
+```
+
+Now we want to iterate over the dataframe rows and insert a field by order, whenever we match one of the edge-names we'll change the field were inserting:
+
+```{r}
+fix_edge_names <- append(edge_names[1:2], append("Mary Leakey", edge_names[3:14])) # fix edge names because "Mary Leakey" appears twice
+
+fix_fields <- append(fields[1:2], append("Archaeology", fields[3:14]))
+
+comb_sci_df <- cbind(url_sci_df, fields=vector(length = 575))
+
+comb_sci_df$fields[1] <- fields[1]
+j=1
+for(i in 2:dim(comb_sci_df)[1]){
+  if(comb_sci_df$Name[i] %in% fix_edge_names)
+    j <- j+1
+  comb_sci_df$fields[i] <- fix_fields[j]
+}
+```
+
+We'll extract a sub-table with the first 4 scientists in each field:
+
+```{r}
+sub_table <- comb_sci_df %>% group_by(fields) %>% filter(row_number() %in% 1:4)
+knitr::kable(sub_table)
+```
+
+Q2.4. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+Q2.5. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+
+**Solutions here:** 
+Q2.6. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+
+Q2.7. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+Q2.8. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
+
+
+Q2.9. 
+```{r, cache=TRUE} 
+# YOUR CODE HERE
+```
+
+YOUR ANALYSIS HERE
